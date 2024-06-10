@@ -56,7 +56,7 @@ MQTT_USERNAME=your_mqtt_username
 MQTT_PASSWORD=your_mqtt_password
 CA_CERT_PATH=path/to/your/ca-cert.pem
 
-Estructura de las Hojas de Cálculo de Google:
+##Estructura de las Hojas de Cálculo de Google:
 
 Asegúrate de que tu Google Sheet tenga las siguientes hojas y columnas:
 
