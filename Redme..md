@@ -2,15 +2,14 @@
 
 Este proyecto demuestra cómo integrar Glide y MQTT para actualizar datos en tiempo real en Google Sheets. A continuación se presenta una guía paso a paso para implementar este proyecto.
 
-#Tabla de Contenidos
-#Descripción del Proyecto
-#Requisitos Previos
-#Instalación
-#Configuración
-#Estructura de las Hojas de Cálculo de Google:
-#Estructura del Proyecto
-#Contribución
-#Licencia
+Descripción del Proyecto
+Requisitos Previos
+Instalación
+Configuración
+Ejecutar el Proyecto
+Estructura del Proyecto
+Contribución
+Licencia
 
 #Descripción del Proyecto
 Este proyecto integra Glide y MQTT para automatizar la actualización de Google Sheets en tiempo real. Utiliza Node.js para suscribirse a tópicos de MQTT, procesar los mensajes y actualizar los datos en Google Sheets. Glide se utiliza para crear una interfaz de usuario accesible que permita monitorear los datos en tiempo real.
