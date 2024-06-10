@@ -3,12 +3,19 @@
 Este proyecto demuestra cómo integrar Glide y MQTT para actualizar datos en tiempo real en Google Sheets. A continuación se presenta una guía paso a paso para implementar este proyecto.
 
 Descripción del Proyecto
+
 Requisitos Previos
+
 Instalación
+
 Configuración
+
 Ejecutar el Proyecto
+
 Estructura del Proyecto
+
 Contribución
+
 Licencia
 
 #Descripción del Proyecto
