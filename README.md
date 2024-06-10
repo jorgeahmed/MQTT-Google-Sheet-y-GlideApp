@@ -1,95 +1,196 @@
-# Proyecto: Automatización de Datos en Tiempo Real con Glide y MQTT
+# MQTT Glide Automation
 
-Este proyecto demuestra cómo integrar Glide y MQTT para actualizar datos en tiempo real en Google Sheets. A continuación se presenta una guía paso a paso para implementar este proyecto.
+## Introduction
+This project automates the process of updating Google Sheets in real-time based on data received from an MQTT server. It uses Node.js to subscribe to MQTT topics, parse the data, and update the Google Sheets. Additionally, it integrates with Glide to provide a user-friendly interface for monitoring the data.
 
-## Tabla de Contenidos
+## Features
+- Real-time data updates from MQTT to Google Sheets
+- Integration with Glide for periodic monitoring
+- Automatic handling of new and existing entries in Google Sheets
+- Easy configuration and deployment
 
-- [Descripción del Proyecto](#descripción-del-proyecto)
-- [Requisitos Previos](#requisitos-previos)
-- [Instalación](#instalación)
-- [Configuración](#configuración)
-- [Ejecutar el Proyecto](#ejecutar-el-proyecto)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [Contribución](#contribución)
-- [Licencia](#licencia)
+## Prerequisites
+- Node.js installed on your machine
+- A Google Cloud project with Google Sheets API enabled
+- MQTT broker credentials
 
-## Descripción del Proyecto
+## Installation
 
-Este proyecto integra Glide y MQTT para automatizar la actualización de Google Sheets en tiempo real. Utiliza Node.js para suscribirse a tópicos de MQTT, procesar los mensajes y actualizar los datos en Google Sheets. Glide se utiliza para crear una interfaz de usuario accesible que permita monitorear los datos en tiempo real.
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/jorgeahmed/mqtt-glide-automation.git
+    cd mqtt-glide-automation
+    ```
 
-## Requisitos Previos
+2. Install the dependencies:
+    ```bash
+    npm install
+    ```
 
-Antes de comenzar, asegúrate de tener instalados los siguientes requisitos:
+3. Create a `.env` file in the root of the project with the following content:
+    ```
+    GOOGLE_PROJECT_ID=your-google-project-id
+    GOOGLE_CLIENT_EMAIL=your-google-client-email
+    GOOGLE_PRIVATE_KEY="your-google-private-key"
+    SPREADSHEET_ID=your-google-spreadsheet-id
+    MQTT_BROKER_URL=your-mqtt-broker-url
+    MQTT_USERNAME=your-mqtt-username
+    MQTT_PASSWORD=your-mqtt-password
+    ```
 
-- Node.js (versión 12 o superior)
-- npm (Node Package Manager)
-- Una cuenta de Google con acceso a Google Sheets
-- Archivo de credenciales de la API de Google (google.json)
-- Acceso a un servidor MQTT
+4. Place your `google.json` service account key file in the root of the project.
 
-## Instalación
+## Usage
 
-1. **Clona el repositorio:**
+1. Start the server:
+    ```bash
+    node server.js
+    ```
 
-   ```bash
-   git clone https://github.com/tu-usuario/nombre-del-proyecto.git
-   cd nombre-del-proyecto
+## Code Explanation
 
-2. **Instala las dependencias:**
+### `server.js`
 
-bash
+```javascript
+const { google } = require('googleapis');
+const express = require('express');
+const mqtt = require('mqtt');
+const fs = require('fs');
 
-npm install
-Configuración
-Configura las credenciales de Google API:
+const app = express();
+const port = 3000;
 
-Asegúrate de tener el archivo google.json en el directorio raíz del proyecto. Este archivo debe contener las credenciales de la API de Google para acceder a Google Sheets.
+// Initialize Google Auth
+const auth = new google.auth.GoogleAuth({
+    keyFile: './google.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
 
-Configura las variables del entorno:
+const spreadsheetId = process.env.SPREADSHEET_ID;
+const statusRange = 'Mqtt Status!A:D'; // Define the range for status data
 
-Crea un archivo .env en el directorio raíz del proyecto y añade las siguientes variables:
+// Function to write data to Google Sheets
+async function writeToSheet(values, range) {
+    const sheets = google.sheets({ version: 'v4', auth });
+    try {
+        const currentData = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range
+        });
 
-env
-GOOGLE_SPREADSHEET_ID=your_spreadsheet_id
-MQTT_BROKER_URL=mqtts://broker-url:port
-MQTT_USERNAME=your_mqtt_username
-MQTT_PASSWORD=your_mqtt_password
-CA_CERT_PATH=path/to/your/ca-cert.pem
+        const existingData = currentData.data.values || [];
+        const existingRows = existingData.slice(1);
+        const existingSerials = existingRows.map(row => row[0]);
+        const newSerial = values[0][0];
 
-##Estructura de las Hojas de Cálculo de Google:
+        if (existingSerials.includes(newSerial)) {
+            const rowIndex = existingSerials.indexOf(newSerial) + 2;
+            const updateRange = `${range.split('!')[0]}!A${rowIndex}:${range.split('!')[1].slice(-1)}${rowIndex}`;
+            const resource = { values };
 
-Asegúrate de que tu Google Sheet tenga las siguientes hojas y columnas:
+            const res = await sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: updateRange,
+                valueInputOption: 'USER_ENTERED',
+                resource
+            });
+            await updateXlookupFormula(rowIndex);
+            return res.data;
+        } else {
+            const resource = { values };
 
-Mqtt Status: Columnas A, B, C, D para Serial, Conectado, Fecha, Hora.
-Instalaciones: Columnas AJ para Series de la PCB.
-Ejecutar el Proyecto
-Para ejecutar el proyecto, usa el siguiente comando:
+            const res = await sheets.spreadsheets.values.append({
+                spreadsheetId,
+                range,
+                valueInputOption: 'USER_ENTERED',
+                resource
+            });
+            const rowIndex = existingData.length + 2;
+            await updateXlookupFormula(rowIndex);
+            return res.data;
+        }
+    } catch (error) {
+        console.error(`Error writing to Google Sheets:`, error);
+    }
+}
 
-bash
-Copy code
-npm start
-Estructura del Proyecto
-plaintext
-Copy code
+// Function to update XLOOKUP formulas in Google Sheets
+async function updateXlookupFormula(rowIndex) {
+    const sheets = google.sheets({ version: 'v4', auth });
 
-├── google.json          # Archivo de credenciales de Google API
+    const xlookupFormulaE = `=XLOOKUP(A${rowIndex}, Instalaciones!AJ:AJ, Instalaciones!A:A)`;
+    const xlookupFormulaF = `=XLOOKUP(A${rowIndex}, Instalaciones!AJ:AJ, Instalaciones!B:B)`;
 
-├── .env                 # Archivo de configuración del entorno
+    const resource = {
+        values: [
+            [xlookupFormulaE, xlookupFormulaF]
+        ]
+    };
 
-├── package.json         # Archivo de configuración de npm
+    const range = `Mqtt Status!E${rowIndex}:F${rowIndex}`;
 
-├── server.js            # Archivo principal del servidor Node.js
+    try {
+        const res = await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range,
+            valueInputOption: 'USER_ENTERED',
+            resource
+        });
+        console.log(`XLOOKUP formulas added for row ${rowIndex}:`, res.data);
+    } catch (error) {
+        console.error(`Error adding XLOOKUP formulas:`, error);
+    }
+}
 
-└── README.md            # Documentación del proyecto
+// Connect to the MQTT broker
+const client = mqtt.connect(process.env.MQTT_BROKER_URL, {
+    username: process.env.MQTT_USERNAME,
+    password: process.env.MQTT_PASSWORD,
+    ca: fs.readFileSync('isrgrootx1 (1).pem')
+});
 
-Contribución
+client.on('connect', () => {
+    console.log('Connected to MQTT broker');
+    client.subscribe('sismico/status/#', { qos: 1 }, (err) => {
+        if (!err) {
+            console.log('Subscribed to sismico/status/#');
+        } else {
+            console.error('Failed to subscribe to topic', err);
+        }
+    });
+});
 
-¡Las contribuciones son bienvenidas! Si deseas contribuir a este proyecto, sigue los siguientes pasos:
+client.on('message', async (topic, message) => {
+    console.log(`Message received on ${topic}: ${message.toString()}`);
+    let data;
+    try {
+        data = JSON.parse(message.toString());
+    } catch (e) {
+        console.error('Error parsing MQTT message:', e);
+        return;
+    }
 
-Haz un fork del repositorio.
-Crea una nueva rama (git checkout -b feature/nueva-funcionalidad).
-Realiza tus cambios y haz commit (git commit -am 'Agrega nueva funcionalidad').
-Haz push a la rama (git push origin feature/nueva-funcionalidad).
-Abre un Pull Request.
-Licencia
-Este proyecto está bajo la licencia MIT. Consulta el archivo LICENSE para obtener más detalles
+    const now = new Date();
+    const fecha = now.toISOString().split('T')[0]; // Format date as YYYY-MM-DD
+    const hora = now.toTimeString().split(' ')[0]; // Format time as HH:MM:SS
+
+    if (topic.startsWith('sismico/status/')) {
+        const values = [
+            [
+                data.serial,
+                data.connected ? 'TRUE' : 'FALSE',
+                fecha,
+                hora
+            ]
+        ];
+        await writeToSheet(values, statusRange);
+    }
+});
+
+app.get('/', (req, res) => {
+    res.send('Hello World!');
+});
+
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
